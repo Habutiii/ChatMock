@@ -261,7 +261,7 @@ def main() -> None:
 
     p_serve = sub.add_parser("serve", help="Run local OpenAI-compatible server")
     p_serve.add_argument("--host", default="127.0.0.1")
-    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--port", type=int, default=9099)
     p_serve.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     p_serve.add_argument(
         "--verbose-obfuscation",

@@ -16,6 +16,7 @@ from .responses_api import (
     extract_client_session_id,
     normalize_responses_payload,
 )
+from .security import get_bearer_token, get_request_ip
 from .session import (
     clear_responses_reuse_state,
     note_responses_stream_event,
@@ -74,6 +75,7 @@ def register_websocket_routes(sock: Sock) -> None:
         upstream_ws = None
         upstream_session_id: str | None = None
         active_session_id: str | None = None
+        security = current_app.config.get("API_SECURITY")
 
         def _send_error(message: str, *, status_code: int = 400, code: str | None = None) -> None:
             evt = _error_event(message, status_code=status_code, code=code)
@@ -85,6 +87,13 @@ def register_websocket_routes(sock: Sock) -> None:
                 pass
 
         try:
+            if security is not None:
+                client_ip = get_request_ip(request.headers, request.remote_addr)
+                decision = security.authorize(get_bearer_token(request.headers), client_ip)
+                if not decision.allowed:
+                    _send_error(decision.message, status_code=decision.status_code, code="invalid_api_key")
+                    return
+
             while True:
                 incoming = ws.receive()
                 if incoming is None:

@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 # Virtual environments
+.env
 .env/
 .venv/
 venv/
@@ -16,6 +17,9 @@ dist/
 # Tool caches
 .pytest_cache/
 .mypy_cache/
+
+# Runtime data
+data/
 
 # OS clutter
 .DS_Store

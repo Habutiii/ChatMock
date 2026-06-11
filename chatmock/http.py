@@ -21,4 +21,3 @@ def json_error(message: str, status: int = 400) -> Response:
     for k, v in build_cors_headers().items():
         response.headers.setdefault(k, v)
     return response
-

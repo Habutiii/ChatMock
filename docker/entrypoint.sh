@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export CHATGPT_LOCAL_HOME="${CHATGPT_LOCAL_HOME:-/data}"
+export CHATGPT_LOCAL_HOME="${CHATGPT_LOCAL_HOME:-/app/data}"
 
 cmd="${1:-serve}"
 shift || true
@@ -14,7 +14,7 @@ bool() {
 }
 
 if [[ "$cmd" == "serve" ]]; then
-  PORT="${PORT:-8000}"
+  PORT="${PORT:-9099}"
   ARGS=(serve --host 0.0.0.0 --port "${PORT}")
 
   if bool "${VERBOSE:-}" || bool "${CHATGPT_LOCAL_VERBOSE:-}"; then

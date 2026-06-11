@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
+import tempfile
 import threading
 import time
 import unittest
@@ -54,6 +56,14 @@ class RouteTests(unittest.TestCase):
         self.app = create_app()
         self.client = self.app.test_client()
 
+    def _write_token_file(self, temp_dir: str, *tokens: str) -> str:
+        token_file = os.path.join(temp_dir, "security", "api_tokens.txt")
+        os.makedirs(os.path.dirname(token_file), exist_ok=True)
+        with open(token_file, "w", encoding="utf-8") as fh:
+            for token in tokens:
+                fh.write(f"{token}\n")
+        return token_file
+
     def test_openai_models_list(self) -> None:
         response = self.client.get("/v1/models")
         body = response.get_json()
@@ -70,6 +80,129 @@ class RouteTests(unittest.TestCase):
         model_names = [item["name"] for item in body["models"]]
         self.assertIn("gpt-5.4", model_names)
         self.assertIn("gpt-5.4-mini", model_names)
+
+    def test_health_remains_open_when_auth_is_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                response = client.get("/health")
+        self.assertEqual(response.status_code, 200)
+
+    def test_bearer_token_is_required_when_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                response = client.get("/v1/models")
+        self.assertEqual(response.status_code, 401)
+        self.assertIn("Authorization", response.get_json()["error"]["message"])
+
+    def test_bearer_token_allows_request_when_correct(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                response = client.get("/v1/models", headers={"Authorization": "Bearer secret"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_any_bearer_token_from_file_allows_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "alpha-token", "beta-token", "gamma-token")
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                first = client.get("/v1/models", headers={"Authorization": "Bearer beta-token"})
+                second = client.get("/v1/models", headers={"Authorization": "Bearer gamma-token"})
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+
+    def test_failed_auth_is_blacklisted_on_disk(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            blacklist_path = f"{temp_dir}/ip_blacklist.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_ATTEMPTS": "2",
+                    "CHATMOCK_AUTH_WINDOW_SECONDS": "300",
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": blacklist_path,
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                first = client.get("/v1/models", headers={"Authorization": "Bearer wrong"}, environ_overrides={"REMOTE_ADDR": "1.2.3.4"})
+                second = client.get("/v1/models", headers={"Authorization": "Bearer wrong"}, environ_overrides={"REMOTE_ADDR": "1.2.3.4"})
+                after_blacklist = client.get("/v1/models", headers={"Authorization": "Bearer secret"}, environ_overrides={"REMOTE_ADDR": "1.2.3.4"})
+                reloaded_client = create_app().test_client()
+                after_restart = reloaded_client.get("/v1/models", headers={"Authorization": "Bearer secret"}, environ_overrides={"REMOTE_ADDR": "1.2.3.4"})
+
+            with open(blacklist_path, "r", encoding="utf-8") as fh:
+                blacklist_payload = json.load(fh)
+
+        self.assertEqual(first.status_code, 401)
+        self.assertEqual(second.status_code, 403)
+        self.assertEqual(after_blacklist.status_code, 403)
+        self.assertEqual(after_restart.status_code, 403)
+        self.assertIn("1.2.3.4", blacklist_payload["ips"])
+
+    def test_api_key_file_supports_multiple_tokens_and_hot_reload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            token_file = os.path.join(temp_dir, "security", "api_tokens.txt")
+            os.makedirs(os.path.dirname(token_file), exist_ok=True)
+            with open(token_file, "w", encoding="utf-8") as fh:
+                fh.write("# one token per line\nalpha-token\nbeta-token\n")
+
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                first = client.get("/v1/models", headers={"Authorization": "Bearer alpha-token"})
+                second = client.get("/v1/models", headers={"Authorization": "Bearer beta-token"})
+
+                with open(token_file, "w", encoding="utf-8") as fh:
+                    fh.write("gamma-token\n")
+
+                third = client.get("/v1/models", headers={"Authorization": "Bearer beta-token"})
+                fourth = client.get("/v1/models", headers={"Authorization": "Bearer gamma-token"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(third.status_code, 401)
+        self.assertEqual(fourth.status_code, 200)
 
     @patch("chatmock.routes_openai.start_upstream_request")
     def test_chat_completions(self, mock_start) -> None:

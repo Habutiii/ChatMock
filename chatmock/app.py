@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request as flask_request
 from flask_sock import Sock
 
-from .config import BASE_INSTRUCTIONS, GPT5_CODEX_INSTRUCTIONS
-from .http import build_cors_headers
+from .config import (
+    BASE_INSTRUCTIONS,
+    GPT5_CODEX_INSTRUCTIONS,
+    get_auth_blacklist_attempts,
+    get_auth_blacklist_path,
+    get_auth_window_seconds,
+    get_server_api_key_file,
+)
+from .http import build_cors_headers, json_error
 from .routes_openai import openai_bp
 from .routes_ollama import ollama_bp
+from .security import ApiSecurityManager, get_bearer_token, get_request_ip
 from .websocket_routes import register_websocket_routes
 
 
@@ -36,11 +44,33 @@ def create_app(
         EXPOSE_REASONING_MODELS=bool(expose_reasoning_models),
         DEFAULT_WEB_SEARCH=bool(default_web_search),
     )
+    app.config["API_SECURITY"] = ApiSecurityManager(
+        (),
+        api_key_file=get_server_api_key_file(),
+        blacklist_attempts=get_auth_blacklist_attempts(),
+        window_seconds=get_auth_window_seconds(),
+        blacklist_path=get_auth_blacklist_path(),
+    )
 
     @app.get("/")
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"})
+
+    @app.before_request
+    def _enforce_api_key():
+        if app.config.get("API_SECURITY") is None:
+            return None
+        if flask_request.method == "OPTIONS":
+            return None
+        if flask_request.path in ("/", "/health"):
+            return None
+        security = app.config["API_SECURITY"]
+        client_ip = get_request_ip(flask_request.headers, flask_request.remote_addr)
+        decision = security.authorize(get_bearer_token(flask_request.headers), client_ip)
+        if decision.allowed:
+            return None
+        return json_error(decision.message, status=decision.status_code)
 
     @app.after_request
     def _cors(resp):

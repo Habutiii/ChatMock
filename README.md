@@ -51,7 +51,7 @@ chatmock serve
 ```
 
 
-The server runs at `http://127.0.0.1:8000` by default. Use `http://127.0.0.1:8000/v1` as your base URL for OpenAI-compatible apps.
+The server runs at `http://127.0.0.1:9099` by default. Use `http://127.0.0.1:9099/v1` as your base URL for OpenAI-compatible apps.
 
 <br>
 
@@ -61,7 +61,7 @@ The server runs at `http://127.0.0.1:8000` by default. Use `http://127.0.0.1:800
 <summary><strong>Raycast Integration</strong></summary>
 
 1. **Configure the Host URL**  
-   Open your Raycast Extensions preferences, navigate to the **Ollama** settings section, and input the host URL (default is `127.0.0.1:8000`).  
+   Open your Raycast Extensions preferences, navigate to the **Ollama** settings section, and input the host URL (default is `127.0.0.1:9099`).  
    <img width="587" height="211" alt="Raycast Ollama Host URL configuration" src="https://github.com/user-attachments/assets/012c576b-189a-4b96-832d-bb054d484f2b" />
 
 2. **Sync Your Models**  
@@ -75,7 +75,7 @@ The server runs at `http://127.0.0.1:8000` by default. Use `http://127.0.0.1:800
 <summary><strong>Terax (Agentic Terminal) Integration</strong></summary>
 
 1. **Configure the provider settings**  
-   Open your Terax settings, and switch to the **Models** tab, add a new provider (**OpenAI Compatible**), and input the host URL (default is `http://127.0.0.1:8000/v1`), along with the model IDs you wish to use (API key may be anything).  
+   Open your Terax settings, and switch to the **Models** tab, add a new provider (**OpenAI Compatible**), and input the host URL (default is `http://127.0.0.1:9099/v1`), along with the model IDs you wish to use. If inbound auth is enabled, use any configured bearer token as the API key value in the client.  
    <img width="700" height="337" alt="image" src="https://github.com/user-attachments/assets/d1faf4e2-1969-417d-881e-5fb72f9aa252" />
 
 2. **Favourite, and start using it!** <br>
@@ -120,6 +120,21 @@ All flags go after `chatmock serve`. These can also be set as environment variab
 | `--fast-mode` | `CHATGPT_LOCAL_FAST_MODE` | true/false | false | Priority processing for supported models |
 | `--enable-web-search` | `CHATGPT_LOCAL_ENABLE_WEB_SEARCH` | true/false | false | Allow the model to search the web |
 | `--expose-reasoning-models` | `CHATGPT_LOCAL_EXPOSE_REASONING_MODELS` | true/false | false | List each reasoning level as its own model |
+
+Inbound auth is optional. When enabled, ChatMock accepts `Authorization: Bearer <token>` on all non-health routes.
+
+- `CHATMOCK_API_KEY_FILE`
+  Path to a file with one bearer token per line. This file is re-read on each request. If unset, ChatMock uses `data/security/api_tokens.txt` by default, or `CHATGPT_LOCAL_HOME/security/api_tokens.txt` when `CHATGPT_LOCAL_HOME` is set.
+
+## Install Notes
+
+On Debian or Ubuntu systems with an externally managed Python environment, `python -m pip install -e .` may fail. Use a virtual environment instead:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+```
 
 <details>
 <summary><b>Web search in a request</b></summary>
