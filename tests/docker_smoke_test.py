@@ -109,7 +109,7 @@ def main() -> int:
                 token=args.token,
                 payload={
                     "model": "gpt-5.4-mini",
-                    "messages": [{"role": "user", "content": "Reply with OK"}],
+                    "messages": [{"role": "user", "content": "What is today's date? Reply with the date only."}],
                 },
                 timeout=60.0,
             )
@@ -120,7 +120,12 @@ def main() -> int:
             choices = body.get("choices") if isinstance(body, dict) else None
             if not isinstance(choices, list) or not choices:
                 raise AssertionError(f"Unexpected chat completion payload: {body}")
+            message = choices[0].get("message") if isinstance(choices[0], dict) else None
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, str) or not content.strip():
+                raise AssertionError(f"Unexpected chat completion content: {body}")
             print("PASS: /v1/chat/completions returned expected payload")
+            print(f"MODEL DATE RESPONSE: {content.strip()}")
 
         print("Docker smoke test passed.")
         return 0
