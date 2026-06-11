@@ -67,7 +67,7 @@ ChatMock can require `Authorization: Bearer <token>` for all non-health inbound 
 Supported token sources:
 
 - `CHATMOCK_API_KEY_FILE`
-  Preferred option. File path containing one token per line. This file is re-read on each request. If unset, ChatMock defaults to `CHATGPT_LOCAL_HOME/security/api_tokens.txt`.
+  Preferred option. File path containing one token per line. This file is re-read on each request. If unset, ChatMock defaults to `CHATGPT_LOCAL_HOME/security/api_tokens.txt`. If the file is missing or empty, ChatMock fails closed for non-health routes.
 
 - `CHATMOCK_API_KEYS`
   Comma-separated bearer tokens from environment.
@@ -114,6 +114,7 @@ Current controls implemented in this repository:
 - constant-time token comparison
 - optional token list loaded from disk
 - persistent IP blacklist after repeated failed auth attempts
+- fail-closed behavior when the token file is missing or empty
 - CORS response headers
 
 ## Public Exposure Guidance
@@ -127,6 +128,8 @@ Minimum recommended deployment shape:
 3. Run ChatMock behind the proxy on a private network, not directly on the public interface.
 4. Replace Flask development serving with a production WSGI / ASGI serving setup appropriate for Flask and WebSocket traffic.
 5. Restrict who can reach the service with network policy where possible.
+
+For deployments where ChatMock is only reachable from localhost or from a local tunnel endpoint, do not trust `X-Forwarded-For` from the request. ChatMock should use the direct socket peer address for local blacklisting decisions.
 
 ## Recommended Additional Security Features
 

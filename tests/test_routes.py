@@ -112,6 +112,22 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertIn("Authorization", response.get_json()["error"]["message"])
 
+    def test_empty_token_file_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir)
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": f"{temp_dir}/ip_blacklist.json",
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                response = client.get("/v1/models")
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("missing or empty", response.get_json()["error"]["message"])
+
     def test_bearer_token_allows_request_when_correct(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_token_file(temp_dir, "secret")
@@ -203,6 +219,34 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(third.status_code, 401)
         self.assertEqual(fourth.status_code, 200)
+
+    def test_remote_addr_is_used_instead_of_x_forwarded_for(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            blacklist_path = f"{temp_dir}/ip_blacklist.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_ATTEMPTS": "1",
+                    "CHATMOCK_AUTH_WINDOW_SECONDS": "300",
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": blacklist_path,
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                response = client.get(
+                    "/v1/models",
+                    headers={"Authorization": "Bearer wrong", "X-Forwarded-For": "8.8.8.8"},
+                    environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+                )
+
+            with open(blacklist_path, "r", encoding="utf-8") as fh:
+                blacklist_payload = json.load(fh)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("127.0.0.1", blacklist_payload["ips"])
+        self.assertNotIn("8.8.8.8", blacklist_payload["ips"])
 
     @patch("chatmock.routes_openai.start_upstream_request")
     def test_chat_completions(self, mock_start) -> None:

@@ -39,9 +39,7 @@ class ApiSecurityManager:
     def enabled(self) -> bool:
         if self.api_keys:
             return True
-        if self.api_key_file is None:
-            return False
-        return bool(self._load_api_keys_from_file())
+        return self.api_key_file is not None
 
     def authorize(self, provided_token: str | None, client_ip: str | None) -> AuthDecision:
         if not self.enabled:
@@ -49,6 +47,13 @@ class ApiSecurityManager:
 
         ip = (client_ip or "unknown").strip() or "unknown"
         valid_tokens = self._get_valid_tokens()
+
+        if not valid_tokens:
+            return AuthDecision(
+                False,
+                status_code=503,
+                message="Authentication token file is missing or empty.",
+            )
 
         with self._lock:
             if ip in self._blacklisted_ips:
@@ -134,11 +139,6 @@ class ApiSecurityManager:
 
 
 def get_request_ip(headers: dict[str, str] | object, remote_addr: str | None) -> str:
-    forwarded_for = None
-    if hasattr(headers, "get"):
-        forwarded_for = headers.get("X-Forwarded-For")
-    if isinstance(forwarded_for, str) and forwarded_for.strip():
-        return forwarded_for.split(",", 1)[0].strip()
     return (remote_addr or "unknown").strip() or "unknown"
 
 
