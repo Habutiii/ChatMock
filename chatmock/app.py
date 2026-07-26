@@ -7,6 +7,7 @@ from .config import (
     get_auth_blacklist_attempts,
     get_auth_blacklist_path,
     get_auth_window_seconds,
+    get_require_https,
     get_server_api_key_file,
 )
 from .http import build_cors_headers, json_error
@@ -47,11 +48,20 @@ def create_app(
         window_seconds=get_auth_window_seconds(),
         blacklist_path=get_auth_blacklist_path(),
     )
+    app.config["REQUIRE_HTTPS"] = get_require_https()
 
     @app.get("/")
     @app.get("/health")
     def health():
         return jsonify({"status": "ok"})
+
+    @app.before_request
+    def _enforce_https():
+        if not app.config.get("REQUIRE_HTTPS"):
+            return None
+        if _request_is_https(flask_request):
+            return None
+        return json_error("HTTPS is required. Retry this request over https://.", status=426)
 
     @app.before_request
     def _enforce_api_key():
@@ -80,3 +90,13 @@ def create_app(
     register_websocket_routes(sock)
 
     return app
+
+
+def _request_is_https(req) -> bool:
+    if req.is_secure:
+        return True
+    forwarded_proto = (req.headers.get("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
+    if forwarded_proto == "https":
+        return True
+    forwarded = (req.headers.get("Forwarded") or "").lower()
+    return "proto=https" in forwarded

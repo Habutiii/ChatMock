@@ -51,6 +51,18 @@ def _get_int_env(name: str, default: int) -> int:
         return default
 
 
+def _get_bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 def get_data_root() -> Path:
     configured = (os.getenv("CHATGPT_LOCAL_HOME") or "").strip()
     if configured:
@@ -71,6 +83,10 @@ def get_auth_blacklist_attempts() -> int:
 
 def get_auth_window_seconds() -> int:
     return max(1, _get_int_env("CHATMOCK_AUTH_WINDOW_SECONDS", 300))
+
+
+def get_require_https() -> bool:
+    return _get_bool_env("CHATMOCK_REQUIRE_HTTPS", False)
 
 
 def get_auth_blacklist_path() -> Path:

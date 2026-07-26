@@ -6,8 +6,10 @@ It is intentionally practical, not aspirational. If a format is accepted by the 
 
 ## Base URLs
 
-- OpenAI-compatible: `http://<host>:9099/v1`
-- Ollama-compatible: `http://<host>:9099/api`
+- OpenAI-compatible: `https://<host>/v1`
+- Ollama-compatible: `https://<host>/api`
+
+For local loopback development, plain HTTP on `127.0.0.1:9099` is still common. For any shared or public deployment, use TLS and prefer enabling `CHATMOCK_REQUIRE_HTTPS=true` so plaintext HTTP is rejected.
 
 ## Authentication
 

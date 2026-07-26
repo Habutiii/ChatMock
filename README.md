@@ -51,7 +51,15 @@ chatmock serve
 ```
 
 
-The server runs at `http://127.0.0.1:9099` by default. Use `http://127.0.0.1:9099/v1` as your base URL for OpenAI-compatible apps.
+The local server listens on `http://127.0.0.1:9099` by default. For any networked deployment, put ChatMock behind TLS and use an `https://.../v1` base URL for OpenAI-compatible apps.
+
+If you want ChatMock itself to reject plaintext requests, enable:
+
+```bash
+CHATMOCK_REQUIRE_HTTPS=true
+```
+
+When this is enabled, plain `http://` requests return `426 Upgrade Required`. HTTPS requests are accepted directly or through a reverse proxy that sets `X-Forwarded-Proto: https`.
 
 <br>
 

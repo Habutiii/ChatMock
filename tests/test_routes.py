@@ -102,6 +102,25 @@ class RouteTests(unittest.TestCase):
                 response = client.get("/health")
         self.assertEqual(response.status_code, 200)
 
+    def test_https_requests_are_accepted_when_required(self) -> None:
+        with patch.dict(os.environ, {"CHATMOCK_REQUIRE_HTTPS": "true"}, clear=False):
+            client = create_app().test_client()
+            response = client.get("/health", environ_overrides={"wsgi.url_scheme": "https"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_http_requests_are_rejected_when_https_is_required(self) -> None:
+        with patch.dict(os.environ, {"CHATMOCK_REQUIRE_HTTPS": "true"}, clear=False):
+            client = create_app().test_client()
+            response = client.get("/health")
+        self.assertEqual(response.status_code, 426)
+        self.assertIn("HTTPS is required", response.get_json()["error"]["message"])
+
+    def test_forwarded_https_header_is_accepted_when_required(self) -> None:
+        with patch.dict(os.environ, {"CHATMOCK_REQUIRE_HTTPS": "true"}, clear=False):
+            client = create_app().test_client()
+            response = client.get("/health", headers={"X-Forwarded-Proto": "https"})
+        self.assertEqual(response.status_code, 200)
+
     def test_bearer_token_is_required_when_configured(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_token_file(temp_dir, "secret")
