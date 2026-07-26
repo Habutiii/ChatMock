@@ -4,8 +4,6 @@ from flask import Flask, jsonify, request as flask_request
 from flask_sock import Sock
 
 from .config import (
-    BASE_INSTRUCTIONS,
-    GPT5_CODEX_INSTRUCTIONS,
     get_auth_blacklist_attempts,
     get_auth_blacklist_path,
     get_auth_window_seconds,
@@ -39,8 +37,6 @@ def create_app(
         REASONING_COMPAT=reasoning_compat,
         FAST_MODE=bool(fast_mode),
         DEBUG_MODEL=debug_model,
-        BASE_INSTRUCTIONS=BASE_INSTRUCTIONS,
-        GPT5_CODEX_INSTRUCTIONS=GPT5_CODEX_INSTRUCTIONS,
         EXPOSE_REASONING_MODELS=bool(expose_reasoning_models),
         DEFAULT_WEB_SEARCH=bool(default_web_search),
     )

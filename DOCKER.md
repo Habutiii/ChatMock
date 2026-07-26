@@ -14,17 +14,21 @@
 3) Start the server:
    docker compose up -d --build chatmock
 
+   - Compose publishes the same host port as `PORT` from `.env`, so changing `PORT` changes the URL you should use.
+   - Published ports bind to localhost by default. Set `CHATMOCK_PUBLISH_HOST=0.0.0.0` only when the service must accept remote connections.
+
 4) Free to use it in whichever chat app you like!
 
 ## Configuration
 Set options in `.env` or pass environment variables:
-- `PORT`: Container listening port (default 9099)
+- `PORT`: Container listening port and published host port for the `chatmock` service (default 9099)
+- `CHATMOCK_PUBLISH_HOST`: Host interface used for published ports (default `127.0.0.1`; use `0.0.0.0` for remote access)
 - `CHATMOCK_API_KEY_FILE`: file containing one valid bearer token per line; re-read on each request so you can update it ad hoc. If unset, ChatMock defaults to `/app/data/security/api_tokens.txt`.
 - `CHATMOCK_AUTH_BLACKLIST_ATTEMPTS`: failed auth attempts in the rolling window before the client IP is blacklisted on disk
 - `CHATMOCK_AUTH_WINDOW_SECONDS`: rolling window used for failed auth tracking
 - `CHATMOCK_AUTH_BLACKLIST_PATH`: blacklist file path inside the container, default `/app/data/security/ip_blacklist.json`
 - `VERBOSE`: `true|false` to enable request/stream logs
-- `CHATGPT_LOCAL_REASONING_EFFORT`: minimal|low|medium|high|xhigh
+- `CHATGPT_LOCAL_REASONING_EFFORT`: minimal|low|medium|high|xhigh|max
 - `CHATGPT_LOCAL_REASONING_SUMMARY`: auto|concise|detailed|none
 - `CHATGPT_LOCAL_REASONING_COMPAT`: legacy|o3|think-tags|current
 - `CHATGPT_LOCAL_FAST_MODE`: `true|false` to enable fast mode by default for supported models
@@ -58,8 +62,10 @@ The `data/` folder is bind-mounted into the container at `/app/data`, so both th
 
 ## Test
 
-```
-curl -s http://127.0.0.1:9099/v1/chat/completions \
+```bash
+curl -s "http://localhost:${PORT:-9099}/v1/chat/completions" \
    -H 'Content-Type: application/json' \
    -d '{"model":"gpt-5-codex","messages":[{"role":"user","content":"Hello world!"}]}' | jq .
 ```
+
+Replace `9099` with the `PORT` value configured in `.env` when using a custom port.

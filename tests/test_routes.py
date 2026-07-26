@@ -72,6 +72,9 @@ class RouteTests(unittest.TestCase):
         self.assertIn("gpt-5.4", model_ids)
         self.assertIn("gpt-5.4-mini", model_ids)
         self.assertIn("gpt-5.3-codex-spark", model_ids)
+        self.assertIn("gpt-5.6-sol", model_ids)
+        self.assertIn("gpt-5.6-terra", model_ids)
+        self.assertIn("gpt-5.6-luna", model_ids)
 
     def test_ollama_tags_list(self) -> None:
         response = self.client.get("/api/tags")
@@ -80,6 +83,9 @@ class RouteTests(unittest.TestCase):
         model_names = [item["name"] for item in body["models"]]
         self.assertIn("gpt-5.4", model_names)
         self.assertIn("gpt-5.4-mini", model_names)
+        self.assertIn("gpt-5.6-sol", model_names)
+        self.assertIn("gpt-5.6-terra", model_names)
+        self.assertIn("gpt-5.6-luna", model_names)
 
     def test_health_remains_open_when_auth_is_configured(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
