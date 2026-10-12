@@ -109,6 +109,7 @@ When this is enabled, plain `http://` requests return `426 Upgrade Required`. HT
 
 - Tool / function calling
 - Vision / image input
+- Native PDF input (OpenAI-compatible file content parts)
 - Thinking summaries (via think tags)
 - Configurable thinking effort
 - Fast mode for supported models
@@ -158,6 +159,32 @@ python -m pip install -e .
   "responses_tool_choice": "auto"
 }
 ```
+
+</details>
+
+<details>
+<summary><b>PDF input</b></summary>
+
+ChatMock forwards PDFs to the upstream Responses API without converting pages to images. Use the standard OpenAI request shape:
+
+```json
+{
+  "model": "gpt-5.4",
+  "input": [{
+    "role": "user",
+    "content": [
+      {
+        "type": "input_file",
+        "filename": "report.pdf",
+        "file_data": "data:application/pdf;base64,..."
+      },
+      {"type": "input_text", "text": "Summarize this report."}
+    ]
+  }]
+}
+```
+
+For `/v1/chat/completions`, use `{"type":"file","file":{...}}` in a user message; ChatMock converts it to `input_file` for the upstream Responses API.
 
 </details>
 

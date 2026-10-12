@@ -207,6 +207,20 @@ def convert_chat_messages_to_responses_input(messages: List[Dict[str, Any]]) -> 
                     url = image.get("url") if isinstance(image, dict) else image
                     if isinstance(url, str) and url:
                         content_items.append({"type": "input_image", "image_url": _normalize_image_data_url(url)})
+                elif ptype == "file":
+                    # Chat Completions represents PDFs as a nested file object;
+                    # Responses uses a flat input_file content item.  Keep the
+                    # file reference/data intact so the upstream can process the
+                    # PDF natively rather than rendering it into page images.
+                    file = part.get("file")
+                    if isinstance(file, dict):
+                        input_file: Dict[str, Any] = {"type": "input_file"}
+                        for key in ("file_id", "file_data", "filename"):
+                            value = file.get(key)
+                            if isinstance(value, str) and value:
+                                input_file[key] = value
+                        if len(input_file) > 1:
+                            content_items.append(input_file)
         elif isinstance(content, str) and content:
             kind = "output_text" if role == "assistant" else "input_text"
             content_items.append({"type": kind, "text": content})

@@ -294,6 +294,57 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(body["model"], "gpt5.4-mini")
 
     @patch("chatmock.routes_openai.start_upstream_request")
+    def test_chat_completions_forwards_pdf_as_native_input_file(self, mock_start) -> None:
+        mock_start.return_value = (
+            FakeUpstream(
+                [
+                    {"type": "response.output_text.delta", "delta": "hello"},
+                    {"type": "response.completed", "response": {"id": "resp-openai"}},
+                ]
+            ),
+            None,
+        )
+        response = self.client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "gpt-5.4",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "file",
+                                "file": {
+                                    "filename": "report.pdf",
+                                    "file_data": "data:application/pdf;base64,JVBERi0=",
+                                },
+                            },
+                            {"type": "text", "text": "Summarize this report."},
+                        ],
+                    }
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            mock_start.call_args.args[1],
+            [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_file",
+                            "filename": "report.pdf",
+                            "file_data": "data:application/pdf;base64,JVBERi0=",
+                        },
+                        {"type": "input_text", "text": "Summarize this report."},
+                    ],
+                }
+            ],
+        )
+
+    @patch("chatmock.routes_openai.start_upstream_request")
     def test_chat_completions_honors_debug_model_override(self, mock_start) -> None:
         app = create_app(debug_model="gpt-5.4")
         client = app.test_client()
@@ -455,6 +506,35 @@ class RouteTests(unittest.TestCase):
         )
         self.assertEqual(outbound_payload["reasoning"]["effort"], "medium")
         self.assertIsInstance(outbound_payload["prompt_cache_key"], str)
+
+    @patch("chatmock.routes_openai.start_upstream_raw_request")
+    def test_responses_route_preserves_native_pdf_input_file(self, mock_start) -> None:
+        mock_start.return_value = (
+            FakeUpstream(
+                [
+                    {
+                        "type": "response.completed",
+                        "response": {"id": "resp-pdf", "object": "response", "status": "completed", "output": []},
+                    }
+                ],
+                headers={"Content-Type": "text/event-stream"},
+            ),
+            None,
+        )
+        pdf_part = {
+            "type": "input_file",
+            "filename": "report.pdf",
+            "file_data": "data:application/pdf;base64,JVBERi0=",
+        }
+        response = self.client.post(
+            "/v1/responses",
+            json={
+                "model": "gpt-5.4",
+                "input": [{"type": "message", "role": "user", "content": [pdf_part]}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_start.call_args.args[0]["input"][0]["content"], [pdf_part])
 
     @patch("chatmock.routes_openai.start_upstream_raw_request")
     def test_responses_route_honors_debug_model_override(self, mock_start) -> None:
