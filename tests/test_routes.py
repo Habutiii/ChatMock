@@ -513,6 +513,14 @@ class RouteTests(unittest.TestCase):
             FakeUpstream(
                 [
                     {
+                        "type": "response.output_item.done",
+                        "item": {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "output_text", "text": "P12345678"}],
+                        },
+                    },
+                    {
                         "type": "response.completed",
                         "response": {"id": "resp-pdf", "object": "response", "status": "completed", "output": []},
                     }
@@ -535,6 +543,7 @@ class RouteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(mock_start.call_args.args[0]["input"][0]["content"], [pdf_part])
+        self.assertEqual(response.get_json()["output"][0]["content"][0]["text"], "P12345678")
 
     @patch("chatmock.routes_openai.start_upstream_raw_request")
     def test_responses_route_honors_debug_model_override(self, mock_start) -> None:
