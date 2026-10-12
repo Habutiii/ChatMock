@@ -567,6 +567,26 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(response.get_json()["output_text"], "P12345678")
 
     @patch("chatmock.routes_openai.start_upstream_raw_request")
+    def test_responses_route_preserves_completed_output_text_when_completion_has_no_output(self, mock_start) -> None:
+        mock_start.return_value = (
+            FakeUpstream(
+                [
+                    {"type": "response.output_text.done", "text": "P12345678"},
+                    {
+                        "type": "response.completed",
+                        "response": {"id": "resp-done", "object": "response", "status": "completed", "output": []},
+                    },
+                ],
+                headers={"Content-Type": "text/event-stream"},
+            ),
+            None,
+        )
+        response = self.client.post("/v1/responses", json={"model": "gpt-5.4", "input": "read this"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["output_text"], "P12345678")
+
+    @patch("chatmock.routes_openai.start_upstream_raw_request")
     def test_responses_route_honors_debug_model_override(self, mock_start) -> None:
         app = create_app(debug_model="gpt-5.4")
         client = app.test_client()

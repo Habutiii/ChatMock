@@ -184,10 +184,10 @@ def aggregate_response_from_sse(
             if isinstance(response, dict):
                 response_obj = response
             kind = evt.get("type")
-            if kind == "response.output_text.delta":
-                delta = evt.get("delta")
-                if isinstance(delta, str):
-                    output_text_parts.append(delta)
+            if kind in ("response.output_text.delta", "response.output_text.done"):
+                text = evt.get("delta") if kind.endswith(".delta") else evt.get("text")
+                if isinstance(text, str):
+                    output_text_parts.append(text)
             if kind == "response.output_item.done":
                 item = evt.get("item")
                 if isinstance(item, dict):
