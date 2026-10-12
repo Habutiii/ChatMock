@@ -172,6 +172,7 @@ def aggregate_response_from_sse(
     response_obj: Dict[str, Any] | None = None
     error_obj: Dict[str, Any] | None = None
     output_items: List[Dict[str, Any]] = []
+    output_text_parts: List[str] = []
     try:
         for evt in iter_sse_event_payloads(upstream):
             if callable(on_event):
@@ -183,6 +184,10 @@ def aggregate_response_from_sse(
             if isinstance(response, dict):
                 response_obj = response
             kind = evt.get("type")
+            if kind == "response.output_text.delta":
+                delta = evt.get("delta")
+                if isinstance(delta, str):
+                    output_text_parts.append(delta)
             if kind == "response.output_item.done":
                 item = evt.get("item")
                 if isinstance(item, dict):
@@ -194,9 +199,16 @@ def aggregate_response_from_sse(
                     error_obj = {"error": {"message": "response.failed"}}
                 break
             if kind == "response.completed":
-                if response_obj is not None and not response_obj.get("output") and output_items:
+                if response_obj is not None and (
+                    (not response_obj.get("output") and output_items) or output_text_parts
+                ):
                     response_obj = dict(response_obj)
-                    response_obj["output"] = output_items
+                    if not response_obj.get("output") and output_items:
+                        response_obj["output"] = output_items
+                    if output_text_parts:
+                        # Some upstream Responses streams omit the completed
+                        # message body but emit its text as delta events.
+                        response_obj["output_text"] = "".join(output_text_parts)
                 break
     finally:
         upstream.close()
