@@ -12,7 +12,6 @@ from .model_registry import (
 )
 from .reasoning import build_reasoning_param
 from .session import ensure_session_id
-from .utils import add_pdf_page_images_to_responses_input
 
 
 @dataclass(frozen=True)
@@ -82,8 +81,6 @@ def normalize_responses_payload(
 
     if "input" in normalized:
         normalized["input"] = canonicalize_responses_input(normalized.get("input"))
-        if isinstance(normalized["input"], list):
-            normalized["input"] = add_pdf_page_images_to_responses_input(normalized["input"])
 
     if "store" not in normalized:
         normalized["store"] = False

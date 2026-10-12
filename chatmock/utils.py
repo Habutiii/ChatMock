@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
-import io
 import json
 import os
 import platform
@@ -16,77 +15,6 @@ import requests
 
 from .config import CLIENT_ID_DEFAULT, OAUTH_TOKEN_URL
 from .version import __version__
-
-
-# Rendering a few pages gives vision-capable upstreams a reliable visual
-# representation of PDFs. Keep the limit deliberately small: page images are
-# embedded as data URLs and therefore count toward the request body size.
-_PDF_VISION_MAX_PAGES = 5
-_PDF_VISION_MAX_DIMENSION = 2048
-
-
-def render_pdf_file_data_to_images(file_data: str) -> List[str]:
-    """Render base64 PDF data into PNG data URLs for vision input.
-
-    The native ``input_file`` is still forwarded separately. Rendering is a
-    best-effort enhancement, so invalid PDFs and an unavailable renderer do
-    not prevent ordinary PDF/text processing.
-    """
-    if not isinstance(file_data, str) or not file_data:
-        return []
-    try:
-        encoded = file_data
-        if file_data.startswith("data:"):
-            header, separator, encoded = file_data.partition(",")
-            if not separator or "application/pdf" not in header.lower() or ";base64" not in header.lower():
-                return []
-        encoded = encoded.strip().replace("\n", "").replace("\r", "")
-        encoded = encoded.replace("-", "+").replace("_", "/")
-        encoded += "=" * (-len(encoded) % 4)
-        pdf_bytes = base64.b64decode(encoded, validate=True)
-
-        import pypdfium2 as pdfium
-
-        images: List[str] = []
-        document = pdfium.PdfDocument(pdf_bytes)
-        for page_index in range(min(len(document), _PDF_VISION_MAX_PAGES)):
-            page = document[page_index]
-            width, height = page.get_size()
-            longest_side = max(width, height)
-            scale = min(2.0, _PDF_VISION_MAX_DIMENSION / longest_side) if longest_side else 1.0
-            bitmap = page.render(scale=scale)
-            with bitmap.to_pil() as image, io.BytesIO() as buffer:
-                image.save(buffer, format="PNG")
-                image_data = base64.b64encode(buffer.getvalue()).decode("ascii")
-                images.append(f"data:image/png;base64,{image_data}")
-        return images
-    except Exception:
-        return []
-
-
-def add_pdf_page_images_to_responses_input(input_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Append page images after base64 PDF ``input_file`` parts in Responses input."""
-    expanded_items: List[Dict[str, Any]] = []
-    for item in input_items:
-        if item.get("type") != "message" or not isinstance(item.get("content"), list):
-            expanded_items.append(item)
-            continue
-
-        expanded_item = dict(item)
-        expanded_content: List[Any] = []
-        for part in item["content"]:
-            expanded_content.append(part)
-            if not isinstance(part, dict) or part.get("type") != "input_file":
-                continue
-            file_data = part.get("file_data")
-            if isinstance(file_data, str):
-                expanded_content.extend(
-                    {"type": "input_image", "image_url": image_url}
-                    for image_url in render_pdf_file_data_to_images(file_data)
-                )
-        expanded_item["content"] = expanded_content
-        expanded_items.append(expanded_item)
-    return expanded_items
 
 
 def eprint(*args, **kwargs) -> None:
@@ -281,10 +209,9 @@ def convert_chat_messages_to_responses_input(messages: List[Dict[str, Any]]) -> 
                         content_items.append({"type": "input_image", "image_url": _normalize_image_data_url(url)})
                 elif ptype == "file":
                     # Chat Completions represents PDFs as a nested file object;
-                    # Responses uses a flat input_file content item. Keep it for
-                    # native text extraction and also render base64 PDFs into
-                    # images because this upstream does not consistently inspect
-                    # images embedded in native PDF input.
+                    # Responses uses a flat input_file content item.  Keep the
+                    # file reference/data intact so the upstream can process the
+                    # PDF natively rather than rendering it into page images.
                     file = part.get("file")
                     if isinstance(file, dict):
                         input_file: Dict[str, Any] = {"type": "input_file"}
@@ -294,12 +221,6 @@ def convert_chat_messages_to_responses_input(messages: List[Dict[str, Any]]) -> 
                                 input_file[key] = value
                         if len(input_file) > 1:
                             content_items.append(input_file)
-                        file_data = input_file.get("file_data")
-                        if isinstance(file_data, str):
-                            content_items.extend(
-                                {"type": "input_image", "image_url": image_url}
-                                for image_url in render_pdf_file_data_to_images(file_data)
-                            )
         elif isinstance(content, str) and content:
             kind = "output_text" if role == "assistant" else "input_text"
             content_items.append({"type": kind, "text": content})

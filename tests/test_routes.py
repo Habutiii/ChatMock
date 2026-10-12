@@ -294,9 +294,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(body["model"], "gpt5.4-mini")
 
     @patch("chatmock.routes_openai.start_upstream_request")
-    @patch("chatmock.utils.render_pdf_file_data_to_images")
-    def test_chat_completions_forwards_pdf_as_native_input_file(self, mock_render, mock_start) -> None:
-        mock_render.return_value = ["data:image/png;base64,cGFnZS1pbWFnZQ=="]
+    def test_chat_completions_forwards_pdf_as_native_input_file(self, mock_start) -> None:
         mock_start.return_value = (
             FakeUpstream(
                 [
@@ -340,7 +338,6 @@ class RouteTests(unittest.TestCase):
                             "filename": "report.pdf",
                             "file_data": "data:application/pdf;base64,JVBERi0=",
                         },
-                        {"type": "input_image", "image_url": "data:image/png;base64,cGFnZS1pbWFnZQ=="},
                         {"type": "input_text", "text": "Summarize this report."},
                     ],
                 }
@@ -511,9 +508,7 @@ class RouteTests(unittest.TestCase):
         self.assertIsInstance(outbound_payload["prompt_cache_key"], str)
 
     @patch("chatmock.routes_openai.start_upstream_raw_request")
-    @patch("chatmock.utils.render_pdf_file_data_to_images")
-    def test_responses_route_preserves_native_pdf_input_file(self, mock_render, mock_start) -> None:
-        mock_render.return_value = ["data:image/png;base64,cGFnZS1pbWFnZQ=="]
+    def test_responses_route_preserves_native_pdf_input_file(self, mock_start) -> None:
         mock_start.return_value = (
             FakeUpstream(
                 [
@@ -539,10 +534,7 @@ class RouteTests(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            mock_start.call_args.args[0]["input"][0]["content"],
-            [pdf_part, {"type": "input_image", "image_url": "data:image/png;base64,cGFnZS1pbWFnZQ=="}],
-        )
+        self.assertEqual(mock_start.call_args.args[0]["input"][0]["content"], [pdf_part])
 
     @patch("chatmock.routes_openai.start_upstream_raw_request")
     def test_responses_route_honors_debug_model_override(self, mock_start) -> None:

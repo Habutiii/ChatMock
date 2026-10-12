@@ -165,7 +165,7 @@ python -m pip install -e .
 <details>
 <summary><b>PDF input</b></summary>
 
-ChatMock forwards PDFs to the upstream Responses API and, when `file_data` contains base64 PDF data, renders the first five pages as image inputs. This lets vision-capable models inspect charts, scans, and other page images even when the upstream's native PDF handling only extracts text. Use the standard OpenAI request shape:
+ChatMock forwards PDFs to the upstream Responses API without converting pages to images. Use the standard OpenAI request shape:
 
 ```json
 {
