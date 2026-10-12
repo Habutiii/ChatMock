@@ -184,8 +184,15 @@ def aggregate_response_from_sse(
             if isinstance(response, dict):
                 response_obj = response
             kind = evt.get("type")
-            if kind in ("response.output_text.delta", "response.output_text.done"):
-                text = evt.get("delta") if kind.endswith(".delta") else evt.get("text")
+            if kind == "response.output_text.delta":
+                text = evt.get("delta")
+                if isinstance(text, str):
+                    output_text_parts.append(text)
+            elif kind == "response.output_text.done" and not output_text_parts:
+                # The done event repeats the complete text already received in
+                # output_text.delta events.  Only use it when this upstream
+                # response did not stream any deltas.
+                text = evt.get("text")
                 if isinstance(text, str):
                     output_text_parts.append(text)
             if kind == "response.output_item.done":

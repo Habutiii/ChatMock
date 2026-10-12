@@ -552,6 +552,7 @@ class RouteTests(unittest.TestCase):
                 [
                     {"type": "response.output_text.delta", "delta": "P123"},
                     {"type": "response.output_text.delta", "delta": "45678"},
+                    {"type": "response.output_text.done", "text": "P12345678"},
                     {
                         "type": "response.completed",
                         "response": {"id": "resp-delta", "object": "response", "status": "completed", "output": []},
