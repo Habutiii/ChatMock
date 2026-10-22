@@ -6,6 +6,7 @@ import json
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from time import time
 
@@ -57,7 +58,7 @@ class ApiSecurityManager:
             )
 
         with self._lock:
-            if ip in self._blacklisted_ips and not _is_loopback_ip(ip):
+            if ip in self._blacklisted_ips and not _is_blacklist_exempt_ip(ip):
                 return AuthDecision(False, status_code=403, message="IP address is blacklisted.")
 
             if provided_token and self._matches_token(provided_token, valid_tokens):
@@ -69,7 +70,7 @@ class ApiSecurityManager:
             count = len(failures)
             self._failed_attempts[ip] = failures
 
-            if count >= self.blacklist_attempts and not _is_loopback_ip(ip):
+            if count >= self.blacklist_attempts and not _is_blacklist_exempt_ip(ip):
                 self._blacklisted_ips[ip] = {
                     "blocked_at": datetime.now(UTC).isoformat(),
                     "failures": count,
@@ -151,6 +152,38 @@ def _is_loopback_ip(ip: str) -> bool:
         return ipaddress.ip_address(ip).is_loopback
     except ValueError:
         return False
+
+
+def _is_blacklist_exempt_ip(ip: str) -> bool:
+    """Allow only loopback and this container's direct Docker gateway to recover from bad local tokens."""
+    return _is_loopback_ip(ip) or ip in _docker_default_gateway_ips()
+
+
+@lru_cache(maxsize=1)
+def _docker_default_gateway_ips() -> frozenset[str]:
+    """Return Docker's directly connected default gateway, not an entire private subnet.
+
+    A host-network client reaches a bridge-network container through this gateway
+    (for example ``172.21.0.1``). Trusting only that one address preserves the
+    blacklist for LAN and internet clients, even when they use private ranges.
+    """
+    if not Path("/.dockerenv").exists():
+        return frozenset()
+    try:
+        routes = Path("/proc/net/route").read_text(encoding="utf-8").splitlines()[1:]
+    except (FileNotFoundError, OSError, UnicodeDecodeError):
+        return frozenset()
+    gateways: set[str] = set()
+    for route in routes:
+        fields = route.split()
+        if len(fields) < 3 or fields[1] != "00000000":
+            continue
+        try:
+            gateway = int(fields[2], 16).to_bytes(4, byteorder="little")
+            gateways.add(str(ipaddress.IPv4Address(gateway)))
+        except (ValueError, OverflowError):
+            continue
+    return frozenset(gateways)
 
 
 def get_bearer_token(headers: dict[str, str] | object) -> str | None:
