@@ -269,9 +269,31 @@ class RouteTests(unittest.TestCase):
             with open(blacklist_path, "r", encoding="utf-8") as fh:
                 blacklist_payload = json.load(fh)
 
-        self.assertEqual(response.status_code, 403)
-        self.assertIn("127.0.0.1", blacklist_payload["ips"])
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("127.0.0.1", blacklist_payload["ips"])
         self.assertNotIn("8.8.8.8", blacklist_payload["ips"])
+
+    def test_loopback_ip_is_never_blacklisted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_token_file(temp_dir, "secret")
+            blacklist_path = f"{temp_dir}/ip_blacklist.json"
+            with patch.dict(
+                os.environ,
+                {
+                    "CHATGPT_LOCAL_HOME": temp_dir,
+                    "CHATMOCK_AUTH_BLACKLIST_ATTEMPTS": "1",
+                    "CHATMOCK_AUTH_BLACKLIST_PATH": blacklist_path,
+                },
+                clear=False,
+            ):
+                client = create_app().test_client()
+                rejected = client.get("/v1/models", headers={"Authorization": "Bearer wrong"}, environ_overrides={"REMOTE_ADDR": "127.0.0.1"})
+                accepted = client.get("/v1/models", headers={"Authorization": "Bearer secret"}, environ_overrides={"REMOTE_ADDR": "127.0.0.1"})
+
+            self.assertFalse(os.path.exists(blacklist_path))
+
+        self.assertEqual(rejected.status_code, 401)
+        self.assertEqual(accepted.status_code, 200)
 
     @patch("chatmock.routes_openai.start_upstream_request")
     def test_chat_completions(self, mock_start) -> None:

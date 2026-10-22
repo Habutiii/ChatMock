@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import json
 import threading
 from dataclasses import dataclass
@@ -56,7 +57,7 @@ class ApiSecurityManager:
             )
 
         with self._lock:
-            if ip in self._blacklisted_ips:
+            if ip in self._blacklisted_ips and not _is_loopback_ip(ip):
                 return AuthDecision(False, status_code=403, message="IP address is blacklisted.")
 
             if provided_token and self._matches_token(provided_token, valid_tokens):
@@ -68,7 +69,7 @@ class ApiSecurityManager:
             count = len(failures)
             self._failed_attempts[ip] = failures
 
-            if count >= self.blacklist_attempts:
+            if count >= self.blacklist_attempts and not _is_loopback_ip(ip):
                 self._blacklisted_ips[ip] = {
                     "blocked_at": datetime.now(UTC).isoformat(),
                     "failures": count,
@@ -140,6 +141,16 @@ class ApiSecurityManager:
 
 def get_request_ip(headers: dict[str, str] | object, remote_addr: str | None) -> str:
     return (remote_addr or "unknown").strip() or "unknown"
+
+
+def _is_loopback_ip(ip: str) -> bool:
+    """Keep local clients recoverable when their configured token changes."""
+    if ip.casefold() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(ip).is_loopback
+    except ValueError:
+        return False
 
 
 def get_bearer_token(headers: dict[str, str] | object) -> str | None:
